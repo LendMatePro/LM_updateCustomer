@@ -60,7 +60,7 @@ export const handler = async (event) => {
     });
 
     if (oldPhone !== phone) {
-      // New phone record - only create if doesn't exist
+      // New phone lock - ensure uniqueness
       transactItems.push({
         Put: {
           TableName: TABLE_NAME,
@@ -73,7 +73,7 @@ export const handler = async (event) => {
         }
       });
 
-      // New CUSTOMER_LOOKUP
+      // New CUSTOMER_LOOKUP record
       transactItems.push({
         Put: {
           TableName: TABLE_NAME,
@@ -113,8 +113,37 @@ export const handler = async (event) => {
           })
         }
       });
+    } else if (oldNormalizedName !== newNormalizedName) {
+      // Name changed but phone is the same – delete old lookup, insert new
+      transactItems.push({
+        Delete: {
+          TableName: TABLE_NAME,
+          Key: marshall({
+            PK: "CUSTOMER_LOOKUP",
+            SK: `${phone}#${oldNormalizedName}`
+          })
+        }
+      });
+
+      transactItems.push({
+        Put: {
+          TableName: TABLE_NAME,
+          Item: marshall({
+            PK: "CUSTOMER_LOOKUP",
+            SK: `${phone}#${newNormalizedName}`,
+            Info: {
+              customerId,
+              name,
+              address,
+              email,
+              phone
+            }
+          }),
+          ConditionExpression: "attribute_not_exists(PK)"
+        }
+      });
     } else {
-      // Phone unchanged – just update the lookup record
+      // No change to lookup key – just update contents
       transactItems.push({
         Put: {
           TableName: TABLE_NAME,
